@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, Car, UserRound } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { CopyId } from '@/components/copy-id';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -6,7 +6,6 @@ import { ValueCell } from '@/components/value-cell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CollectionTable } from '@/features/collections/collection-table';
 import { t, type TranslationKey } from '@/i18n';
 import { formatDate, formatDateTime, formatNumber, fullName } from '@/lib/format';
 import {
@@ -19,6 +18,7 @@ import {
 import { BlockControls } from './block-controls';
 import { BlockedBadge } from './blocked-badge';
 import { EditProfileDialog } from './edit-profile-dialog';
+import { RecordTable } from './record-table';
 import { UserRecords } from './user-records';
 import { vehicleLabel } from './vehicle-label';
 
@@ -30,11 +30,21 @@ const COUNT_LABELS: Record<keyof RecordCounts, TranslationKey> = {
   documents: 'stats.documents',
 };
 
+/** Up to two initials, for the avatar. */
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.slice(0, 1))
+    .join('')
+    .toUpperCase();
+}
+
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-sm font-medium">{children}</dd>
     </div>
   );
 }
@@ -44,7 +54,7 @@ function ProfileCard({ user, notificationCount }: { user: AdminUser; notificatio
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div className="flex flex-col gap-1">
-          <CardTitle className="text-base">{t('userDetail.profile')}</CardTitle>
+          <CardTitle>{t('userDetail.profile')}</CardTitle>
           <CardDescription>{t('userDetail.profileHint')}</CardDescription>
         </div>
         <EditProfileDialog user={user} />
@@ -105,20 +115,24 @@ function VehiclesCard({ vehicles }: { vehicles: UserVehicle[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          {t('userDetail.vehicles', { count: formatNumber(vehicles.length) })}
-        </CardTitle>
+        <CardTitle>{t('userDetail.vehicles', { count: formatNumber(vehicles.length) })}</CardTitle>
       </CardHeader>
       <CardContent>
         {vehicles.length === 0 ? (
-          <EmptyState title={t('userDetail.noVehicles')} />
+          <EmptyState icon={Car} title={t('userDetail.noVehicles')} />
         ) : (
           <ul className="grid gap-3 md:grid-cols-2">
             {vehicles.map((vehicle) => (
-              <li key={vehicle.id} className="flex flex-col gap-3 rounded-lg border p-4">
+              <li
+                key={vehicle.id}
+                className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium" dir="auto">
-                    {vehicleLabel(vehicle)}
+                  <span className="flex items-center gap-2 font-medium">
+                    <span className="flex size-8 items-center justify-center rounded-md bg-accent text-accent-foreground">
+                      <Car className="size-4" aria-hidden />
+                    </span>
+                    <span dir="auto">{vehicleLabel(vehicle)}</span>
                   </span>
                   <CopyId id={vehicle.id} />
                 </div>
@@ -153,14 +167,14 @@ function TransfersCard({ transfers }: { transfers: UserDetail['transfers'] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{t('userDetail.transfers')}</CardTitle>
+        <CardTitle>{t('userDetail.transfers')}</CardTitle>
         <CardDescription>{t('userDetail.transfersHint')}</CardDescription>
       </CardHeader>
       <CardContent>
         {transfers.length === 0 ? (
-          <EmptyState title={t('userDetail.noTransfers')} />
+          <EmptyState icon={ArrowRightLeft} title={t('userDetail.noTransfers')} />
         ) : (
-          <CollectionTable fields={fields} documents={transfers} />
+          <RecordTable fields={fields} documents={transfers} />
         )}
       </CardContent>
     </Card>
@@ -203,19 +217,31 @@ export function UserDetailPage() {
   return (
     <>
       {back}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight" dir="auto">
-              {name ?? t('users.noName')}
-            </h1>
-            {user.blockedAt && <BlockedBadge />}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5 shadow-card">
+        <div className="flex min-w-0 items-center gap-4">
+          <div
+            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold text-accent-foreground"
+            aria-hidden
+          >
+            {name ? initials(name) : <UserRound className="size-6" />}
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="font-mono" dir="ltr">
-              {user.phone}
-            </span>
-            <CopyId id={user.id} />
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight" dir="auto">
+                {name ?? t('users.noName')}
+              </h1>
+              {user.blockedAt ? (
+                <BlockedBadge />
+              ) : (
+                <Badge variant="success">{t('users.active')}</Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <span className="font-mono" dir="ltr">
+                {user.phone}
+              </span>
+              <CopyId id={user.id} />
+            </div>
           </div>
         </div>
         <BlockControls user={user} />
@@ -224,10 +250,15 @@ export function UserDetailPage() {
       <ProfileCard user={user} notificationCount={notificationCount} />
       <VehiclesCard vehicles={vehicles} />
       <TransfersCard transfers={transfers} />
-      <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold">{t('userDetail.records')}</h2>
-        <UserRecords userId={user.id} vehicles={vehicles} />
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('userDetail.records')}</CardTitle>
+          <CardDescription>{t('userDetail.recordsHint')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UserRecords userId={user.id} vehicles={vehicles} />
+        </CardContent>
+      </Card>
     </>
   );
 }

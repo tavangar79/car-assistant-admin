@@ -12,15 +12,6 @@ export const errorBody = (message: string, details?: unknown) =>
 /** Default handlers: a signed-in admin and contract-shaped data. Tests override with `server.use`. */
 export const handlers = [
   http.get(api('/auth/me'), () => HttpResponse.json({ admin: { username: 'operator' } })),
-  http.get(api('/collections'), () =>
-    HttpResponse.json({
-      collections: [
-        { name: 'users', count: 1 },
-        { name: 'vehicles', count: 1 },
-        { name: 'fuel_logs', count: 12 },
-      ],
-    }),
-  ),
   http.get(api('/stats'), ({ request }) => {
     const url = new URL(request.url);
     const bucket = (url.searchParams.get('bucket') ?? 'day') as 'day' | 'week' | 'month';

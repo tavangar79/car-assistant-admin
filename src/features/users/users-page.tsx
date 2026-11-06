@@ -1,9 +1,10 @@
-import { Search } from 'lucide-react';
+import { Search, SearchX, UserRound, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { LoadMore } from '@/components/load-more';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -29,14 +30,14 @@ export function UsersPage() {
   return (
     <>
       <PageHeader title={t('users.title')} description={t('users.description')} />
-      <div className="relative max-w-sm">
+      <div className="relative w-full sm:max-w-sm">
         <Search
-          className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden
         />
         <Input
           type="search"
-          className="ps-8"
+          className="h-10 bg-card ps-9"
           placeholder={t('users.searchPlaceholder')}
           aria-label={t('users.search')}
           value={search}
@@ -48,20 +49,21 @@ export function UsersPage() {
       {users.isError && <ErrorState error={users.error} onRetry={() => void users.refetch()} />}
       {users.isSuccess && rows.length === 0 && (
         <EmptyState
+          icon={debounced.trim() ? SearchX : Users}
           title={debounced.trim() ? t('users.noMatches') : t('users.none')}
           description={debounced.trim() ? t('users.noMatchesHint') : undefined}
         />
       )}
       {users.isSuccess && rows.length > 0 && (
         <div className="flex flex-col gap-3">
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-hidden rounded-xl border bg-card shadow-card">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('users.name')}</TableHead>
                   <TableHead>{t('users.phone')}</TableHead>
                   <TableHead className="text-end">{t('users.vehicles')}</TableHead>
-                  <TableHead>{t('users.joined')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('users.joined')}</TableHead>
                   <TableHead>{t('users.status')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -73,14 +75,24 @@ export function UsersPage() {
                     onClick={() => void navigate(`/users/${user.id}`)}
                   >
                     <TableCell>
-                      <Link
-                        to={`/users/${user.id}`}
-                        className="font-medium hover:underline"
-                        dir="auto"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {fullName(user) ?? t('users.noName')}
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+                          aria-hidden
+                        >
+                          {fullName(user)?.slice(0, 1).toUpperCase() ?? (
+                            <UserRound className="size-4" />
+                          )}
+                        </span>
+                        <Link
+                          to={`/users/${user.id}`}
+                          className="rounded-sm font-medium hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                          dir="auto"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {fullName(user) ?? t('users.noName')}
+                        </Link>
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs" dir="ltr">
                       {user.phone}
@@ -88,14 +100,14 @@ export function UsersPage() {
                     <TableCell className="text-end tabular-nums">
                       {formatNumber(user.vehicleCount)}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell className="hidden whitespace-nowrap text-muted-foreground tabular-nums md:table-cell">
                       {formatDateTime(user.createdAt)}
                     </TableCell>
                     <TableCell>
                       {user.blockedAt ? (
                         <BlockedBadge />
                       ) : (
-                        <span className="text-sm text-muted-foreground">{t('users.active')}</span>
+                        <Badge variant="success">{t('users.active')}</Badge>
                       )}
                     </TableCell>
                   </TableRow>

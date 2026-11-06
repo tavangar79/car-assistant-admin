@@ -86,6 +86,18 @@ export const serviceItems: ServiceItem[] = [
     disabled: true,
     ...TIMES,
   },
+  {
+    id: '65f1a2b3c4d5e6f7a8b9c103',
+    itemId: 'brake_pads',
+    scope: { makeId: null, modelId: null, trimId: null },
+    categoryId: 'brakes',
+    title: 'Brake pads',
+    subtitle: 'Front and rear',
+    icon: 'tire_repair',
+    sortOrder: 2,
+    disabled: false,
+    ...TIMES,
+  },
 ];
 
 export const intervals: Interval[] = [

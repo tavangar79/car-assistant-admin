@@ -1,7 +1,8 @@
 # Car Assistant Admin
 
-Admin panel for the Car Assistant API: dashboard, users (block/unblock, profile edit), service catalog
-and a read-only data browser. React 19 + Vite + TypeScript + shadcn/ui.
+Admin panel for the Car Assistant API: dashboard, users (block/unblock, profile edit, read-only
+records) and the service catalog as a global → make → model → trim tree. React 19 + Vite +
+TypeScript + shadcn/ui.
 
 ## Run
 

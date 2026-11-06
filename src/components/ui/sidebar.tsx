@@ -215,7 +215,9 @@ function Sidebar({
       <div
         data-slot="sidebar-gap"
         className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+          // In-flow twin of the fixed sidebar: same background and edge, so long pages (and
+          // full-page captures) show the sidebar column all the way down.
+          "relative h-full w-(--sidebar-width) border-e bg-sidebar transition-[width] duration-200 ease-linear group-data-[collapsible=offcanvas]:border-e-0",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"

@@ -1,6 +1,7 @@
 /** Every English UI string. Keys are flat; `{name}` marks a placeholder filled by `t()`. */
 export const en = {
-  'app.name': 'Car Assistant Admin',
+  'brand.name': 'Car Assistant',
+  'brand.tagline': 'Admin console',
 
   'common.loading': 'Loading…',
   'common.loadMore': 'Load more',
@@ -9,7 +10,6 @@ export const en = {
   'common.save': 'Save',
   'common.saving': 'Saving…',
   'common.delete': 'Delete',
-  'common.actions': 'Actions',
   'common.none': '—',
   'common.yes': 'Yes',
   'common.no': 'No',
@@ -30,11 +30,10 @@ export const en = {
   'theme.toDark': 'Switch to dark theme',
   'theme.toLight': 'Switch to light theme',
 
+  'nav.section': 'Manage',
   'nav.dashboard': 'Dashboard',
   'nav.users': 'Users',
   'nav.catalog': 'Catalog',
-  'nav.dataBrowser': 'Data browser',
-  'nav.collectionsError': 'Could not load collections. Retry',
   'nav.logout': 'Log out',
 
   'notFound.title': 'Not found',
@@ -42,7 +41,13 @@ export const en = {
   'notFound.home': 'Back to dashboard',
 
   'login.title': 'Admin sign in',
-  'login.subtitle': 'Car Assistant operator access',
+  'login.subtitle': 'Sign in to the Car Assistant Admin console.',
+  'login.heroTitle': 'Everything you need to run Car Assistant, in one place.',
+  'login.highlightStats': 'Live totals and activity trends',
+  'login.highlightUsers': 'User support: profiles, vehicles and blocking',
+  'login.highlightCatalog': 'Service catalog per make, model and trim',
+  'login.footer': 'For Car Assistant operators only.',
+  'login.securityNote': 'Protected by password and authenticator code.',
   'login.username': 'Username',
   'login.password': 'Password',
   'login.totp': 'Authenticator code',
@@ -110,6 +115,9 @@ export const en = {
   'userDetail.transfersHint': 'Transfers this user sent, or that were sent to their phone.',
   'userDetail.noTransfers': 'No transfers.',
   'userDetail.records': 'Records',
+  'userDetail.recordsHint': 'Read-only lists of what this user and their vehicles have stored.',
+
+  'records.empty': 'No records yet.',
   'userDetail.pickVehicle': 'Pick a vehicle',
 
   'profile.edit': 'Edit',
@@ -136,20 +144,10 @@ export const en = {
   'block.blocked': '{name} is blocked.',
   'block.unblocked': '{name} is unblocked.',
 
-  'collections.title': 'Data browser',
-  'collections.description': 'Read-only view of stored data. Files and secrets are never shown.',
-  'collections.readOnly': 'Read-only',
-  'collections.documents': '{count} documents',
-  'collections.none': 'No collections.',
-  'collections.empty': 'No documents.',
-
   'scope.make': 'Make',
   'scope.model': 'Model',
   'scope.trim': 'Trim',
-  'scope.all': 'All scopes',
   'scope.global': 'Global',
-  'scope.anyModel': 'Any model (make-wide)',
-  'scope.anyTrim': 'Any trim (model-wide)',
 
   'category.fluids': 'Oil and fluids',
   'category.brakes': 'Brakes and safety',
@@ -159,11 +157,46 @@ export const en = {
   'category.periodic': 'Main periodic services',
 
   'catalog.title': 'Catalog',
-  'catalog.description': 'Service items and interval defaults, per make, model or trim.',
+  'catalog.description':
+    'Service items and interval defaults. Pick a scope in the tree to see what applies there.',
+  'catalog.breadcrumbs': 'Current scope',
+  'catalog.tree.title': 'Scopes',
+  'catalog.tree.label': 'Catalog scopes',
+  'catalog.tree.open': 'Browse scopes',
+  'catalog.tree.drawerHint': 'Global, then each make, model and trim.',
+  'catalog.tree.search': 'Search makes, models and trims',
+  'catalog.tree.searchPlaceholder': 'Search make, model, trim',
+  'catalog.tree.noMatches': 'No make, model or trim matches.',
+  'catalog.tree.expand': 'Expand {name}',
+  'catalog.tree.collapse': 'Collapse {name}',
+  'catalog.tree.overrideCount': 'Rows defined at this scope: {count}',
+  'catalog.levelHint.global':
+    'The base catalog. It applies to every vehicle unless a make, model or trim overrides a row.',
+  'catalog.levelHint.make': 'Rows here apply to every {name} vehicle and override Global.',
+  'catalog.levelHint.model':
+    'Rows here apply to every {name} vehicle and override its make and Global.',
+  'catalog.levelHint.trim':
+    'Rows here apply only to the {name} trim and override every wider scope.',
+  'catalog.summary': '{own} defined here · {inherited} inherited',
+  'catalog.tag.inherited': 'Inherited from {from}',
+  'catalog.tag.override': 'Override',
+  'catalog.tag.replaces': 'Replaces the {from} row',
+  'catalog.tag.added': 'Added here',
+  'catalog.overrideHere': 'Override here',
+  'catalog.overrideRow': 'Override {slug} here',
+  'catalog.overrideItem': 'Override service item',
+  'catalog.overrideInterval': 'Override interval default',
+  'catalog.every': 'Every {km} km or {months} months',
+  'catalog.covers': 'Covers: {ids}',
+  'catalog.explain.appliesTo': 'Applies to:',
+  'catalog.explain.global':
+    'Global rows apply to every vehicle, unless a make, model or trim has a row with the same id.',
+  'catalog.explain.scoped':
+    'This row applies to {path} vehicles. If a wider scope has a row with the same id, this one fully replaces it for these vehicles.',
+  'catalog.explain.override':
+    'Overriding means this row fully replaces the {from} row for {path} vehicles. Nothing is merged: every field below is used as it is. Delete the override to fall back to {from}.',
   'catalog.items': 'Service items',
   'catalog.intervals': 'Interval defaults',
-  'catalog.scopeFilter': 'Scope',
-  'catalog.vehicleCatalogError': 'Could not load makes and models. Retry',
   'catalog.rulesTitle': 'How the catalog works',
   'catalog.ruleResolution':
     'For each vehicle the most specific row wins: trim, then model, then make, then global. It fully replaces the others.',
@@ -172,8 +205,6 @@ export const en = {
   'catalog.ruleImmutable': 'The id and the scope of a row cannot change after it is created.',
   'catalog.ruleLimits':
     'Interval defaults: {kmMin} to {kmMax} km, and {monthsMin} to {monthsMax} months.',
-  'catalog.status': 'Status',
-  'catalog.statusActive': 'Active',
   'catalog.statusDisabled': 'Disabled',
   'catalog.noItems': 'No service items in this scope.',
   'catalog.noIntervals': 'No interval defaults in this scope.',
@@ -203,7 +234,6 @@ export const en = {
   'catalog.disabledDone': 'Disabled.',
   'catalog.field.itemId': 'Item id',
   'catalog.field.intervalId': 'Interval id',
-  'catalog.field.scope': 'Scope',
   'catalog.field.category': 'Category',
   'catalog.field.title': 'Title',
   'catalog.field.subtitle': 'Subtitle',
@@ -215,14 +245,12 @@ export const en = {
   'catalog.field.coversItemIds': 'Covers items',
   'catalog.field.disabled': 'Disabled (hidden for vehicles in this scope)',
   'catalog.hint.slug': '2 to 40 characters: a-z, 0-9 and _.',
-  'catalog.hint.scope': 'Global applies to every vehicle.',
   'catalog.hint.icon': 'A Material Symbols name, such as oil_barrel.',
   'catalog.hint.km': '{min} to {max}',
   'catalog.hint.months': '{min} to {max}',
   'catalog.hint.covers': 'Pick at least one item.',
   'catalog.rule.itemId': 'Use 2 to 40 characters: a-z, 0-9 and _.',
   'catalog.rule.intervalId': 'Use 2 to 40 characters: a-z, 0-9 and _.',
-  'catalog.rule.scope': 'Pick a valid scope.',
   'catalog.rule.categoryId': 'Pick a category.',
   'catalog.rule.title': 'Required.',
   'catalog.rule.subtitle': 'Required.',

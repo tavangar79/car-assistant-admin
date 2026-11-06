@@ -16,7 +16,6 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { t } from '@/i18n';
 import {
   createIntervalSchema,
-  GLOBAL_SCOPE,
   type Interval,
   type IntervalFields,
   intervalFieldsSchema,
@@ -29,13 +28,16 @@ import {
   type VehicleCatalog,
 } from './api';
 import { changedValues, invalidFields } from './diff';
-import { FormField, SaveError } from './form-parts';
-import { ScopeLabel } from './scope-label';
-import { ScopePicker } from './scope-picker';
+import { FormField, SaveError, ScopeExplainer } from './form-parts';
+
+/** Same modes as the item dialog: create at `scope`, override an inherited row, or edit. */
+export type IntervalDialogState =
+  | { mode: 'create' }
+  | { mode: 'override'; source: Interval }
+  | { mode: 'edit'; row: Interval; replaces: Interval | null };
 
 type Form = {
   intervalId: string;
-  scope: Scope;
   title: string;
   description: string;
   icon: string;
@@ -46,42 +48,49 @@ type Form = {
   disabled: boolean;
 };
 
-function initialForm(row: Interval | null, scope: Scope): Form {
+function initialForm(state: IntervalDialogState): Form {
+  const from = state.mode === 'edit' ? state.row : state.mode === 'override' ? state.source : null;
   return {
-    intervalId: row?.intervalId ?? '',
-    scope: row?.scope ?? scope,
-    title: row?.title ?? '',
-    description: row?.description ?? '',
-    icon: row?.icon ?? '',
-    coversItemIds: row?.coversItemIds ?? [],
-    km: row ? String(row.km) : '',
-    months: row ? String(row.months) : '',
-    sortOrder: row ? String(row.sortOrder) : '0',
-    disabled: row?.disabled ?? false,
+    intervalId: from?.intervalId ?? '',
+    title: from?.title ?? '',
+    description: from?.description ?? '',
+    icon: from?.icon ?? '',
+    coversItemIds: from?.coversItemIds ?? [],
+    km: from ? String(from.km) : '',
+    months: from ? String(from.months) : '',
+    sortOrder: from ? String(from.sortOrder) : '0',
+    disabled: from?.disabled ?? false,
   };
 }
 
 const toInt = (value: string) => (value.trim() === '' ? Number.NaN : Number(value));
 
 function IntervalForm({
-  row,
-  defaultScope,
+  state,
+  scope,
   catalog,
   itemIds,
   onDone,
 }: {
-  row: Interval | null;
-  defaultScope: Scope;
+  state: IntervalDialogState;
+  scope: Scope;
   catalog: VehicleCatalog | undefined;
   itemIds: string[];
   onDone: () => void;
 }) {
-  const [form, setForm] = useState<Form>(() => initialForm(row, defaultScope));
+  const [form, setForm] = useState<Form>(() => initialForm(state));
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const save = useSaveInterval();
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm({ ...form, [key]: value });
   // Keep ids the row already covers even if no item row has them any more.
   const choices = [...new Set([...itemIds, ...form.coversItemIds])].sort();
+  const rowScope = state.mode === 'edit' ? state.row.scope : scope;
+  const replaces =
+    state.mode === 'edit'
+      ? (state.replaces?.scope ?? null)
+      : state.mode === 'override'
+        ? state.source.scope
+        : null;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -100,7 +109,8 @@ function IntervalForm({
       onDone();
     };
 
-    if (row) {
+    if (state.mode === 'edit') {
+      const { row } = state;
       const parsed = intervalFieldsSchema.safeParse(fields);
       if (!parsed.success) return setInvalid(invalidFields(parsed.error.issues));
       setInvalid(new Set());
@@ -123,7 +133,7 @@ function IntervalForm({
     const parsed = createIntervalSchema.safeParse({
       ...fields,
       intervalId: form.intervalId.trim(),
-      scope: form.scope,
+      scope,
     });
     if (!parsed.success) return setInvalid(invalidFields(parsed.error.issues));
     setInvalid(new Set());
@@ -135,43 +145,22 @@ function IntervalForm({
 
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-      {row ? (
-        <div className="flex flex-col gap-1 rounded-lg bg-muted/50 p-3 text-sm">
-          <span className="font-mono">{row.intervalId}</span>
-          <ScopeLabel scope={row.scope} catalog={catalog} />
-          <span className="text-xs text-muted-foreground">{t('catalog.immutableInterval')}</span>
-        </div>
-      ) : (
-        <>
-          <FormField
-            id="interval-intervalId"
-            label={t('catalog.field.intervalId')}
-            hint={t('catalog.hint.slug')}
-            error={error('intervalId')}
-          >
-            <Input
-              id="interval-intervalId"
-              dir="ltr"
-              className="font-mono"
-              value={form.intervalId}
-              onChange={(e) => set('intervalId', e.target.value)}
-            />
-          </FormField>
-          <FormField
-            id="interval-scope-make"
-            label={t('catalog.field.scope')}
-            hint={t('catalog.hint.scope')}
-            error={error('scope')}
-          >
-            <ScopePicker
-              idPrefix="interval-scope"
-              catalog={catalog}
-              value={form.scope}
-              onChange={(scope) => set('scope', scope ?? GLOBAL_SCOPE)}
-            />
-          </FormField>
-        </>
-      )}
+      <ScopeExplainer scope={rowScope} replaces={replaces} catalog={catalog} />
+      <FormField
+        id="interval-intervalId"
+        label={t('catalog.field.intervalId')}
+        hint={state.mode === 'create' ? t('catalog.hint.slug') : t('catalog.immutableInterval')}
+        error={error('intervalId')}
+      >
+        <Input
+          id="interval-intervalId"
+          dir="ltr"
+          className="font-mono read-only:bg-muted read-only:text-muted-foreground"
+          readOnly={state.mode !== 'create'}
+          value={form.intervalId}
+          onChange={(e) => set('intervalId', e.target.value)}
+        />
+      </FormField>
       <FormField id="interval-title" label={t('catalog.field.title')} error={error('title')}>
         <Input
           id="interval-title"
@@ -192,7 +181,7 @@ function IntervalForm({
           onChange={(e) => set('description', e.target.value)}
         />
       </FormField>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           id="interval-km"
           label={t('catalog.field.km')}
@@ -276,7 +265,7 @@ function IntervalForm({
           ))}
         </ToggleGroup>
       </FormField>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 rounded-lg border p-3">
         <Switch
           id="interval-disabled"
           checked={form.disabled}
@@ -299,36 +288,40 @@ function IntervalForm({
   );
 }
 
-/** Add (row = null) or edit an interval default row. */
+const TITLE = {
+  create: 'catalog.addInterval',
+  override: 'catalog.overrideInterval',
+  edit: 'catalog.editInterval',
+} as const;
+
+/** Add, override or edit an interval default row. `scope` is the selected tree node. */
 export function IntervalFormDialog({
-  open,
-  onOpenChange,
-  row,
-  defaultScope,
+  state,
+  onClose,
+  scope,
   catalog,
   itemIds,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  row: Interval | null;
-  defaultScope: Scope;
+  state: IntervalDialogState | null;
+  onClose: () => void;
+  scope: Scope;
   catalog: VehicleCatalog | undefined;
   itemIds: string[];
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{row ? t('catalog.editInterval') : t('catalog.addInterval')}</DialogTitle>
+          <DialogTitle>{t(TITLE[state?.mode ?? 'create'])}</DialogTitle>
           <DialogDescription>{t('catalog.intervalDialogHint')}</DialogDescription>
         </DialogHeader>
-        {open && (
+        {state && (
           <IntervalForm
-            row={row}
-            defaultScope={defaultScope}
+            state={state}
+            scope={scope}
             catalog={catalog}
             itemIds={itemIds}
-            onDone={() => onOpenChange(false)}
+            onDone={onClose}
           />
         )}
       </DialogContent>

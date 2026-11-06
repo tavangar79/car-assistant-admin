@@ -22,7 +22,6 @@ import { t } from '@/i18n';
 import {
   CATEGORY_IDS,
   createItemSchema,
-  GLOBAL_SCOPE,
   type ItemFields,
   itemFieldsSchema,
   type Scope,
@@ -31,13 +30,19 @@ import {
   type VehicleCatalog,
 } from './api';
 import { changedValues, invalidFields } from './diff';
-import { FormField, SaveError } from './form-parts';
-import { ScopePicker } from './scope-picker';
-import { ScopeLabel } from './scope-label';
+import { FormField, SaveError, ScopeExplainer } from './form-parts';
+
+/**
+ * What the dialog does: `create` a new row at `scope`, `override` an inherited row by creating
+ * a copy at `scope`, or `edit` an existing row.
+ */
+export type ItemDialogState =
+  | { mode: 'create' }
+  | { mode: 'override'; source: ServiceItem }
+  | { mode: 'edit'; row: ServiceItem; replaces: ServiceItem | null };
 
 type Form = {
   itemId: string;
-  scope: Scope;
   categoryId: string;
   title: string;
   subtitle: string;
@@ -46,34 +51,41 @@ type Form = {
   disabled: boolean;
 };
 
-function initialForm(row: ServiceItem | null, scope: Scope): Form {
+function initialForm(state: ItemDialogState): Form {
+  const from = state.mode === 'edit' ? state.row : state.mode === 'override' ? state.source : null;
   return {
-    itemId: row?.itemId ?? '',
-    scope: row?.scope ?? scope,
-    categoryId: row?.categoryId ?? CATEGORY_IDS[0],
-    title: row?.title ?? '',
-    subtitle: row?.subtitle ?? '',
-    icon: row?.icon ?? '',
-    sortOrder: row ? String(row.sortOrder) : '0',
-    disabled: row?.disabled ?? false,
+    itemId: from?.itemId ?? '',
+    categoryId: from?.categoryId ?? CATEGORY_IDS[0],
+    title: from?.title ?? '',
+    subtitle: from?.subtitle ?? '',
+    icon: from?.icon ?? '',
+    sortOrder: from ? String(from.sortOrder) : '0',
+    disabled: from?.disabled ?? false,
   };
 }
 
 function ItemForm({
-  row,
-  defaultScope,
+  state,
+  scope,
   catalog,
   onDone,
 }: {
-  row: ServiceItem | null;
-  defaultScope: Scope;
+  state: ItemDialogState;
+  scope: Scope;
   catalog: VehicleCatalog | undefined;
   onDone: () => void;
 }) {
-  const [form, setForm] = useState<Form>(() => initialForm(row, defaultScope));
+  const [form, setForm] = useState<Form>(() => initialForm(state));
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const save = useSaveItem();
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm({ ...form, [key]: value });
+  const rowScope = state.mode === 'edit' ? state.row.scope : scope;
+  const replaces =
+    state.mode === 'edit'
+      ? (state.replaces?.scope ?? null)
+      : state.mode === 'override'
+        ? state.source.scope
+        : null;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -90,7 +102,8 @@ function ItemForm({
       onDone();
     };
 
-    if (row) {
+    if (state.mode === 'edit') {
+      const { row } = state;
       const parsed = itemFieldsSchema.safeParse(fields);
       if (!parsed.success) return setInvalid(invalidFields(parsed.error.issues));
       setInvalid(new Set());
@@ -108,11 +121,7 @@ function ItemForm({
       return;
     }
 
-    const parsed = createItemSchema.safeParse({
-      ...fields,
-      itemId: form.itemId.trim(),
-      scope: form.scope,
-    });
+    const parsed = createItemSchema.safeParse({ ...fields, itemId: form.itemId.trim(), scope });
     if (!parsed.success) return setInvalid(invalidFields(parsed.error.issues));
     setInvalid(new Set());
     save.mutate(parsed.data, { onSuccess });
@@ -123,43 +132,22 @@ function ItemForm({
 
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-      {row ? (
-        <div className="flex flex-col gap-1 rounded-lg bg-muted/50 p-3 text-sm">
-          <span className="font-mono">{row.itemId}</span>
-          <ScopeLabel scope={row.scope} catalog={catalog} />
-          <span className="text-xs text-muted-foreground">{t('catalog.immutable')}</span>
-        </div>
-      ) : (
-        <>
-          <FormField
-            id="item-itemId"
-            label={t('catalog.field.itemId')}
-            hint={t('catalog.hint.slug')}
-            error={error('itemId')}
-          >
-            <Input
-              id="item-itemId"
-              dir="ltr"
-              className="font-mono"
-              value={form.itemId}
-              onChange={(e) => set('itemId', e.target.value)}
-            />
-          </FormField>
-          <FormField
-            id="item-scope-make"
-            label={t('catalog.field.scope')}
-            hint={t('catalog.hint.scope')}
-            error={error('scope')}
-          >
-            <ScopePicker
-              idPrefix="item-scope"
-              catalog={catalog}
-              value={form.scope}
-              onChange={(scope) => set('scope', scope ?? GLOBAL_SCOPE)}
-            />
-          </FormField>
-        </>
-      )}
+      <ScopeExplainer scope={rowScope} replaces={replaces} catalog={catalog} />
+      <FormField
+        id="item-itemId"
+        label={t('catalog.field.itemId')}
+        hint={state.mode === 'create' ? t('catalog.hint.slug') : t('catalog.immutable')}
+        error={error('itemId')}
+      >
+        <Input
+          id="item-itemId"
+          dir="ltr"
+          className="font-mono read-only:bg-muted read-only:text-muted-foreground"
+          readOnly={state.mode !== 'create'}
+          value={form.itemId}
+          onChange={(e) => set('itemId', e.target.value)}
+        />
+      </FormField>
       <FormField id="item-category" label={t('catalog.field.category')} error={error('categoryId')}>
         <Select value={form.categoryId} onValueChange={(value) => set('categoryId', value)}>
           <SelectTrigger id="item-category" className="w-full">
@@ -190,7 +178,7 @@ function ItemForm({
           onChange={(e) => set('subtitle', e.target.value)}
         />
       </FormField>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           id="item-icon"
           label={t('catalog.field.icon')}
@@ -219,7 +207,7 @@ function ItemForm({
           />
         </FormField>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 rounded-lg border p-3">
         <Switch
           id="item-disabled"
           checked={form.disabled}
@@ -242,35 +230,32 @@ function ItemForm({
   );
 }
 
-/** Add (row = null) or edit a service item row. */
+const TITLE = {
+  create: 'catalog.addItem',
+  override: 'catalog.overrideItem',
+  edit: 'catalog.editItem',
+} as const;
+
+/** Add, override or edit a service item row. `scope` is the selected tree node. */
 export function ItemFormDialog({
-  open,
-  onOpenChange,
-  row,
-  defaultScope,
+  state,
+  onClose,
+  scope,
   catalog,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  row: ServiceItem | null;
-  defaultScope: Scope;
+  state: ItemDialogState | null;
+  onClose: () => void;
+  scope: Scope;
   catalog: VehicleCatalog | undefined;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{row ? t('catalog.editItem') : t('catalog.addItem')}</DialogTitle>
+          <DialogTitle>{t(TITLE[state?.mode ?? 'create'])}</DialogTitle>
           <DialogDescription>{t('catalog.itemDialogHint')}</DialogDescription>
         </DialogHeader>
-        {open && (
-          <ItemForm
-            row={row}
-            defaultScope={defaultScope}
-            catalog={catalog}
-            onDone={() => onOpenChange(false)}
-          />
-        )}
+        {state && <ItemForm state={state} scope={scope} catalog={catalog} onDone={onClose} />}
       </DialogContent>
     </Dialog>
   );

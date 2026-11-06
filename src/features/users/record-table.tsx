@@ -7,10 +7,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { CollectionDocument } from './api';
+import type { CollectionDocument } from './records-api';
 
 /** A read-only table whose columns come from the server's `fields`, so no model needs its own code. */
-export function CollectionTable({
+export function RecordTable({
   fields,
   documents,
 }: {
@@ -18,7 +18,7 @@ export function CollectionTable({
   documents: CollectionDocument[];
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-hidden rounded-xl border bg-card shadow-card">
       <Table>
         <TableHeader>
           <TableRow>

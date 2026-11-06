@@ -1,8 +1,11 @@
+import { Layers } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { t } from '@/i18n';
 import { errorMessageKey, isApiError } from '@/lib/api-client';
+import type { Scope, VehicleCatalog } from './api';
+import { isGlobal, scopePath } from './scope';
 
 export function FormField({
   id,
@@ -27,6 +30,40 @@ export function FormField({
         hint && <p className="text-xs text-muted-foreground">{hint}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * Where a row applies, and what overriding means there: shown inline in the add/edit forms.
+ * `replaces` is the scope of the wider row with the same id, when it is known.
+ */
+export function ScopeExplainer({
+  scope,
+  replaces,
+  catalog,
+}: {
+  scope: Scope;
+  replaces: Scope | null;
+  catalog: VehicleCatalog | undefined;
+}) {
+  const path = scopePath(scope, catalog);
+  let text: string;
+  if (isGlobal(scope)) text = t('catalog.explain.global');
+  else if (replaces)
+    text = t('catalog.explain.override', { path, from: scopePath(replaces, catalog) });
+  else text = t('catalog.explain.scoped', { path });
+
+  return (
+    <Alert className="border-primary/20 bg-accent/60">
+      <Layers className="text-primary" />
+      <AlertTitle>
+        {t('catalog.explain.appliesTo')}{' '}
+        <span className="font-semibold" dir="auto">
+          {path}
+        </span>
+      </AlertTitle>
+      <AlertDescription>{text}</AlertDescription>
+    </Alert>
   );
 }
 

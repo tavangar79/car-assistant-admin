@@ -1,22 +1,24 @@
 import { render, screen, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
+import { USER_ID, VEHICLE_ID } from '@/test/fixtures';
 import { renderApp } from '@/test/render-app';
 import { api, server } from '@/test/server';
-import { CollectionTable } from './collection-table';
+import { RecordTable } from './record-table';
 
 const ID = '65f1a2b3c4d5e6f7a8b9c0d1';
-const VEHICLE = '65f1a2b3c4d5e6f7a8b9c0e2';
+const OTHER = '65f1a2b3c4d5e6f7a8b9c0e3';
+const VISIT = '65f1a2b3c4d5e6f7a8b9c0f4';
 
-describe('CollectionTable', () => {
+describe('RecordTable', () => {
   it('draws columns from fields and formats each value', () => {
     render(
-      <CollectionTable
+      <RecordTable
         fields={['id', 'vehicleId', 'liters', 'fueledAt', 'note', 'plate', 'full', 'missing']}
         documents={[
           {
             id: ID,
-            vehicleId: VEHICLE,
+            vehicleId: VEHICLE_ID,
             liters: 1234.5,
             fueledAt: '2026-01-01T21:00:00.000Z',
             note: 'پر کردن باک',
@@ -53,45 +55,50 @@ describe('CollectionTable', () => {
   });
 });
 
-describe('data browser', () => {
-  it('lists collections with counts and pages through a collection', async () => {
-    const page = (id: string, nextCursor: string | null) => ({
-      name: 'fuel_logs',
-      fields: ['id', 'liters'],
-      documents: [{ id, liters: 40 }],
-      nextCursor,
+describe('user record tabs', () => {
+  it('pages through a vehicle collection filtered by the vehicle', async () => {
+    const page = (id: string, cursor: string | null) => ({
+      name: 'service_visits',
+      fields: ['id', 'km'],
+      documents: [{ id, km: 40 }],
+      nextCursor: cursor,
     });
-    const cursors: (string | null)[] = [];
+    const calls: URLSearchParams[] = [];
     server.use(
-      http.get(api('/collections/fuel_logs'), ({ request }) => {
-        const cursor = new URL(request.url).searchParams.get('cursor');
-        cursors.push(cursor);
-        return HttpResponse.json(cursor ? page(VEHICLE, null) : page(ID, ID));
+      http.get(api('/collections/service_visits'), ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        calls.push(params);
+        return HttpResponse.json(params.get('cursor') ? page(OTHER, null) : page(VISIT, VISIT));
       }),
     );
-    const { user } = renderApp('/data/fuel_logs');
+    const { user } = renderApp(`/users/${USER_ID}`);
 
-    expect(await screen.findByText('65f1…c0d1')).toBeInTheDocument();
-    expect(screen.getByText('12 documents · Read-only')).toBeInTheDocument();
+    expect(await screen.findByText('65f1…c0f4')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('65f1…c0e3')).toBeInTheDocument();
 
-    expect(await screen.findByText('65f1…c0e2')).toBeInTheDocument();
-    expect(cursors).toEqual([null, ID]);
+    expect(calls.map((params) => params.get('vehicleId'))).toEqual([VEHICLE_ID, VEHICLE_ID]);
+    expect(calls.map((params) => params.get('cursor'))).toEqual([null, VISIT]);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
   });
 
-  it('shows the empty state', async () => {
-    renderApp('/data/vehicles');
-    expect(await screen.findByText('No documents.')).toBeInTheDocument();
-  });
-
-  it('shows "not found" for an unknown collection', async () => {
+  it('filters user collections by the user and shows the empty state', async () => {
+    let userId: string | null = null;
     server.use(
-      http.get(api('/collections/admins'), () =>
-        HttpResponse.json({ error: { message: 'Not found' } }, { status: 404 }),
-      ),
+      http.get(api('/collections/notifications'), ({ request }) => {
+        userId = new URL(request.url).searchParams.get('userId');
+        return HttpResponse.json({
+          name: 'notifications',
+          fields: ['id'],
+          documents: [],
+          nextCursor: null,
+        });
+      }),
     );
-    renderApp('/data/admins');
-    expect(await screen.findByText('Not found. It may have been deleted.')).toBeInTheDocument();
+    const { user } = renderApp(`/users/${USER_ID}`);
+    await user.click(await screen.findByRole('tab', { name: 'Notifications' }));
+
+    expect(await screen.findByText('No records yet.')).toBeInTheDocument();
+    expect(userId).toBe(USER_ID);
   });
 });

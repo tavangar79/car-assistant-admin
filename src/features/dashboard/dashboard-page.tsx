@@ -1,5 +1,17 @@
+import {
+  Car,
+  FileText,
+  Fuel,
+  Gauge,
+  type LucideIcon,
+  Receipt,
+  UserX,
+  Users,
+  Wrench,
+  BarChart3,
+} from 'lucide-react';
 import { useState } from 'react';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState, ErrorState } from '@/components/states';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,15 +38,15 @@ import {
   todayInTehran,
 } from './range';
 
-const TOTALS: { key: keyof StatsTotals; label: TranslationKey }[] = [
-  { key: 'users', label: 'stats.users' },
-  { key: 'blockedUsers', label: 'stats.blockedUsers' },
-  { key: 'vehicles', label: 'stats.vehicles' },
-  { key: 'serviceVisits', label: 'stats.serviceVisits' },
-  { key: 'fuelLogs', label: 'stats.fuelLogs' },
-  { key: 'expenses', label: 'stats.expenses' },
-  { key: 'odometerReadings', label: 'stats.odometerReadings' },
-  { key: 'documents', label: 'stats.documents' },
+const TOTALS: { key: keyof StatsTotals; label: TranslationKey; icon: LucideIcon }[] = [
+  { key: 'users', label: 'stats.users', icon: Users },
+  { key: 'blockedUsers', label: 'stats.blockedUsers', icon: UserX },
+  { key: 'vehicles', label: 'stats.vehicles', icon: Car },
+  { key: 'serviceVisits', label: 'stats.serviceVisits', icon: Wrench },
+  { key: 'fuelLogs', label: 'stats.fuelLogs', icon: Fuel },
+  { key: 'expenses', label: 'stats.expenses', icon: Receipt },
+  { key: 'odometerReadings', label: 'stats.odometerReadings', icon: Gauge },
+  { key: 'documents', label: 'stats.documents', icon: FileText },
 ];
 
 const RECORD_KEYS = [
@@ -93,44 +105,86 @@ function SeriesChart({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle>{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent>
         {hasActivity(series, keys) ? (
           <ChartContainer config={chartConfig} className="aspect-auto h-64 w-full">
-            <BarChart data={series} accessibilityLayer>
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey="bucketStart"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                minTickGap={24}
-                tickFormatter={(value: string) => bucketLabel(value, bucket)}
-              />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(value) => bucketLabel(String(value), bucket)}
-                  />
-                }
-              />
-              {stacked && <ChartLegend content={<ChartLegendContent />} />}
-              {keys.map((key, index) => (
-                <Bar
-                  key={key}
-                  dataKey={key}
-                  stackId={stacked ? 'records' : undefined}
-                  fill={`var(--color-${key})`}
-                  radius={!stacked || index === keys.length - 1 ? [4, 4, 0, 0] : 0}
+            {stacked ? (
+              <BarChart data={series} accessibilityLayer>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="bucketStart"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={24}
+                  tickFormatter={(value: string) => bucketLabel(value, bucket)}
                 />
-              ))}
-            </BarChart>
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(value) => bucketLabel(String(value), bucket)}
+                    />
+                  }
+                />
+                <ChartLegend
+                  content={<ChartLegendContent className="flex-wrap gap-x-4 gap-y-1" />}
+                />
+                {keys.map((key, index) => (
+                  <Bar
+                    key={key}
+                    dataKey={key}
+                    stackId="records"
+                    fill={`var(--color-${key})`}
+                    radius={index === keys.length - 1 ? [4, 4, 0, 0] : 0}
+                  />
+                ))}
+              </BarChart>
+            ) : (
+              <AreaChart data={series} accessibilityLayer margin={{ top: 8 }}>
+                <defs>
+                  {keys.map((key) => (
+                    <linearGradient key={key} id={`fill-${key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={`var(--color-${key})`} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={`var(--color-${key})`} stopOpacity={0.02} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="bucketStart"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={24}
+                  tickFormatter={(value: string) => bucketLabel(value, bucket)}
+                />
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(value) => bucketLabel(String(value), bucket)}
+                    />
+                  }
+                />
+                {keys.map((key) => (
+                  <Area
+                    key={key}
+                    dataKey={key}
+                    type="monotone"
+                    stroke={`var(--color-${key})`}
+                    strokeWidth={2}
+                    fill={`url(#fill-${key})`}
+                  />
+                ))}
+              </AreaChart>
+            )}
           </ChartContainer>
         ) : (
-          <EmptyState title={t('dashboard.noActivity')} />
+          <EmptyState icon={BarChart3} title={t('dashboard.noActivity')} />
         )}
       </CardContent>
     </Card>
@@ -139,15 +193,29 @@ function SeriesChart({
 
 function TotalCards({ totals }: { totals: StatsTotals | undefined }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {TOTALS.map(({ key, label }) => (
-        <Card key={key} className="gap-1 py-4">
-          <CardHeader className="px-4">
-            <CardDescription>{t(label)}</CardDescription>
-            <CardTitle className="text-2xl tabular-nums" data-testid={`total-${key}`}>
-              {totals ? formatNumber(totals[key]) : <Skeleton className="h-7 w-16" />}
-            </CardTitle>
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      {TOTALS.map(({ key, label, icon: Icon }) => (
+        <Card key={key} className="gap-3">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardDescription className="leading-tight font-medium">{t(label)}</CardDescription>
+            <span
+              className={
+                key === 'blockedUsers'
+                  ? 'flex size-8 items-center justify-center rounded-lg bg-destructive/10 text-destructive'
+                  : 'flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground'
+              }
+            >
+              <Icon className="size-4" aria-hidden />
+            </span>
           </CardHeader>
+          <CardContent>
+            <div
+              className="text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl"
+              data-testid={`total-${key}`}
+            >
+              {totals ? formatNumber(totals[key]) : <Skeleton className="h-9 w-20" />}
+            </div>
+          </CardContent>
         </Card>
       ))}
     </div>
@@ -213,7 +281,7 @@ export function DashboardPage() {
       ) : (
         <>
           <TotalCards totals={stats.data?.totals} />
-          <p className="-mt-3 text-xs text-muted-foreground">{t('dashboard.totalsNote')}</p>
+          <p className="-mt-2 text-xs text-muted-foreground">{t('dashboard.totalsNote')}</p>
           {stats.data ? (
             <div className="grid gap-4 lg:grid-cols-2">
               <SeriesChart
@@ -244,8 +312,8 @@ export function DashboardPage() {
               role="status"
               aria-label={t('common.loading')}
             >
-              <Skeleton className="h-80" />
-              <Skeleton className="h-80" />
+              <Skeleton className="h-80 rounded-xl" />
+              <Skeleton className="h-80 rounded-xl" />
             </div>
           )}
         </>

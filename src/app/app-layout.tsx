@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Database, LayoutDashboard, LogOut, Users } from 'lucide-react';
+import { LayoutDashboard, ListTree, LogOut, Users } from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { BrandMark } from '@/components/brand-mark';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
   Sidebar,
   SidebarContent,
@@ -13,59 +13,21 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarProvider,
+  SidebarRail,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { useCollections } from '@/features/collections/api';
 import { useMe } from '@/features/auth/use-me';
-import { t } from '@/i18n';
-import { formatNumber } from '@/lib/format';
+import { t, type TranslationKey } from '@/i18n';
 import { clearToken } from '@/lib/token';
 
-const NAV = [
+const NAV: { to: string; label: TranslationKey; icon: typeof Users; end: boolean }[] = [
   { to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
   { to: '/users', label: 'nav.users', icon: Users, end: false },
-  { to: '/catalog', label: 'nav.catalog', icon: BookOpen, end: false },
-] as const;
-
-function CollectionsMenu() {
-  const { pathname } = useLocation();
-  const collections = useCollections();
-
-  if (collections.isPending) {
-    return Array.from({ length: 4 }, (_, index) => (
-      <SidebarMenuItem key={index}>
-        <SidebarMenuSkeleton />
-      </SidebarMenuItem>
-    ));
-  }
-  if (collections.isError) {
-    return (
-      <SidebarMenuItem>
-        <SidebarMenuButton onClick={() => void collections.refetch()}>
-          {t('nav.collectionsError')}
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    );
-  }
-  return collections.data.map((collection) => {
-    const to = `/data/${collection.name}`;
-    return (
-      <SidebarMenuItem key={collection.name}>
-        <SidebarMenuButton asChild isActive={pathname === to} tooltip={collection.name}>
-          <NavLink to={to}>
-            <span className="truncate font-mono text-xs">{collection.name}</span>
-          </NavLink>
-        </SidebarMenuButton>
-        <SidebarMenuBadge>{formatNumber(collection.count)}</SidebarMenuBadge>
-      </SidebarMenuItem>
-    );
-  });
-}
+  { to: '/catalog', label: 'nav.catalog', icon: ListTree, end: false },
+];
 
 function AppSidebar() {
   const { pathname } = useLocation();
@@ -74,26 +36,22 @@ function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Database className="size-4" aria-hidden />
-          </div>
-          <span className="truncate text-sm font-semibold group-data-[collapsible=icon]:hidden">
-            {t('app.name')}
-          </span>
-        </div>
+      <SidebarHeader className="h-16 justify-center border-b px-3">
+        <BrandMark />
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="pt-2">
         <SidebarGroup>
+          <SidebarGroupLabel>{t('nav.section')}</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1">
               {NAV.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton
                     asChild
+                    size="lg"
                     isActive={isActive(item.to, item.end)}
                     tooltip={t(item.label)}
+                    className="h-10 font-medium data-[active=true]:font-semibold"
                   >
                     <NavLink to={item.to} end={item.end}>
                       <item.icon />
@@ -105,17 +63,8 @@ function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-          <SidebarGroupLabel asChild>
-            <NavLink to="/data">{t('nav.dataBrowser')}</NavLink>
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <CollectionsMenu />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
+      <SidebarRail />
     </Sidebar>
   );
 }
@@ -124,6 +73,7 @@ function TopBar() {
   const me = useMe();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const username = me.data?.username;
 
   function logout() {
     clearToken();
@@ -132,19 +82,26 @@ function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur supports-backdrop-filter:bg-background/70 md:px-6">
       <SidebarTrigger className="-ms-1" />
-      <Separator orientation="vertical" className="me-2 h-4" />
       <div className="flex-1" />
-      {me.data && (
-        <span className="text-sm text-muted-foreground" data-testid="admin-username">
-          {me.data.username}
-        </span>
-      )}
       <ThemeToggle />
-      <Button variant="ghost" size="sm" onClick={logout}>
+      {username && (
+        <div className="flex items-center gap-2 rounded-full border bg-card py-1 ps-1 pe-3">
+          <span
+            className="flex size-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground uppercase"
+            aria-hidden
+          >
+            {username.slice(0, 1)}
+          </span>
+          <span className="text-sm font-medium" data-testid="admin-username">
+            {username}
+          </span>
+        </div>
+      )}
+      <Button variant="ghost" size="sm" onClick={logout} aria-label={t('nav.logout')}>
         <LogOut data-icon="inline-start" />
-        {t('nav.logout')}
+        <span className="hidden sm:inline">{t('nav.logout')}</span>
       </Button>
     </header>
   );
@@ -156,7 +113,7 @@ export function AppLayout() {
       <AppSidebar />
       <SidebarInset>
         <TopBar />
-        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-6">
+        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-8">
           <Outlet />
         </main>
       </SidebarInset>

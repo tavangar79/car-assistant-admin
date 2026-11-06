@@ -1,331 +1,227 @@
-import { Info, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { Info, PanelLeftOpen } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { PageHeader } from '@/components/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/states';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { t } from '@/i18n';
 import { formatNumber } from '@/lib/format';
 import {
-  CATEGORY_IDS,
-  GLOBAL_SCOPE,
-  type Interval,
   KM_MAX,
   KM_MIN,
   MONTHS_MAX,
   MONTHS_MIN,
   type Scope,
-  type ServiceItem,
-  useDeleteInterval,
-  useDeleteItem,
   useIntervals,
   useItems,
-  useSaveInterval,
-  useSaveItem,
   useVehicleCatalog,
   type VehicleCatalog,
 } from './api';
-import { IntervalFormDialog } from './interval-form-dialog';
-import { ItemFormDialog } from './item-form-dialog';
-import { RowActions } from './row-actions';
-import { sameScope } from './scope';
-import { ScopeLabel } from './scope-label';
-import { ScopePicker } from './scope-picker';
+import { IntervalsPanel, ItemsPanel } from './catalog-panels';
+import { ancestorScopes, scopeFromParams, scopeKey, scopeNames, scopeToParams } from './scope';
+import { ScopeTree } from './scope-tree';
+import { buildTree, countByScope, LEVEL_LABEL, type ScopeLevel } from './tree';
+
+const LEVEL_HINT = {
+  global: 'catalog.levelHint.global',
+  make: 'catalog.levelHint.make',
+  model: 'catalog.levelHint.model',
+  trim: 'catalog.levelHint.trim',
+} as const;
+
+const levelOf = (scope: Scope): ScopeLevel =>
+  scope.trimId ? 'trim' : scope.modelId ? 'model' : scope.makeId ? 'make' : 'global';
 
 function CatalogRules() {
   return (
-    <Alert>
-      <Info />
-      <AlertTitle>{t('catalog.rulesTitle')}</AlertTitle>
-      <AlertDescription>
-        <ul className="list-disc ps-4">
-          <li>{t('catalog.ruleResolution')}</li>
-          <li>{t('catalog.ruleGlobal')}</li>
-          <li>{t('catalog.ruleImmutable')}</li>
-          <li>
-            {t('catalog.ruleLimits', {
-              kmMin: formatNumber(KM_MIN),
-              kmMax: formatNumber(KM_MAX),
-              monthsMin: MONTHS_MIN,
-              monthsMax: MONTHS_MAX,
-            })}
-          </li>
-        </ul>
-      </AlertDescription>
-    </Alert>
+    <details className="group rounded-xl border bg-card text-sm shadow-card">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-3 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+        <Info className="size-4 text-primary" aria-hidden />
+        {t('catalog.rulesTitle')}
+      </summary>
+      <ul className="flex list-disc flex-col gap-1.5 border-t px-4 py-3 ps-8 text-muted-foreground">
+        <li>{t('catalog.ruleResolution')}</li>
+        <li>{t('catalog.ruleGlobal')}</li>
+        <li>{t('catalog.ruleImmutable')}</li>
+        <li>
+          {t('catalog.ruleLimits', {
+            kmMin: formatNumber(KM_MIN),
+            kmMax: formatNumber(KM_MAX),
+            monthsMin: MONTHS_MIN,
+            monthsMax: MONTHS_MAX,
+          })}
+        </li>
+      </ul>
+    </details>
   );
 }
 
-const filterRows = <R extends { scope: Scope }>(rows: R[], scope: Scope | null) =>
-  scope === null ? rows : rows.filter((row) => sameScope(row.scope, scope));
-
-function StatusBadge({ disabled }: { disabled: boolean }) {
-  return disabled ? (
-    <Badge variant="outline">{t('catalog.statusDisabled')}</Badge>
-  ) : (
-    <Badge variant="secondary">{t('catalog.statusActive')}</Badge>
-  );
-}
-
-const categoryLabel = (id: string) =>
-  (CATEGORY_IDS as readonly string[]).includes(id)
-    ? t(`category.${id as (typeof CATEGORY_IDS)[number]}`)
-    : id;
-
-function ItemsTab({
-  catalog,
+function ScopeBreadcrumbs({
   scope,
+  catalog,
+  onSelect,
 }: {
+  scope: Scope;
   catalog: VehicleCatalog | undefined;
-  scope: Scope | null;
+  onSelect: (scope: Scope) => void;
 }) {
-  const items = useItems();
-  const save = useSaveItem();
-  const remove = useDeleteItem();
-  const [dialog, setDialog] = useState<{ row: ServiceItem | null } | null>(null);
-
-  const add = (
-    <Button onClick={() => setDialog({ row: null })}>
-      <Plus data-icon="inline-start" />
-      {t('catalog.addItem')}
-    </Button>
-  );
-
-  let body;
-  if (items.isPending) body = <LoadingState rows={8} />;
-  else if (items.isError)
-    body = <ErrorState error={items.error} onRetry={() => void items.refetch()} />;
-  else {
-    const rows = filterRows(items.data, scope);
-    body =
-      rows.length === 0 ? (
-        <EmptyState title={t('catalog.noItems')} description={t('catalog.noRowsHint')} />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('catalog.field.itemId')}</TableHead>
-                <TableHead>{t('catalog.field.title')}</TableHead>
-                <TableHead>{t('catalog.field.category')}</TableHead>
-                <TableHead>{t('catalog.field.scope')}</TableHead>
-                <TableHead className="text-end">{t('catalog.field.sortOrder')}</TableHead>
-                <TableHead>{t('catalog.status')}</TableHead>
-                <TableHead className="text-end">{t('common.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className={row.disabled ? 'text-muted-foreground' : undefined}
-                >
-                  <TableCell className="font-mono text-xs">{row.itemId}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span dir="auto">{row.title}</span>
-                      <span dir="auto" className="text-xs text-muted-foreground">
-                        {row.subtitle}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{categoryLabel(row.categoryId)}</TableCell>
-                  <TableCell>
-                    <ScopeLabel scope={row.scope} catalog={catalog} />
-                  </TableCell>
-                  <TableCell className="text-end tabular-nums">{row.sortOrder}</TableCell>
-                  <TableCell>
-                    <StatusBadge disabled={row.disabled} />
-                  </TableCell>
-                  <TableCell>
-                    <RowActions
-                      slug={row.itemId}
-                      scope={row.scope}
-                      disabled={row.disabled}
-                      busy={save.isPending || remove.isPending}
-                      onEdit={() => setDialog({ row })}
-                      onToggle={() =>
-                        save.mutateAsync({ id: row.id, patch: { disabled: !row.disabled } })
-                      }
-                      onDelete={() => remove.mutateAsync(row.id)}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-  }
-
+  const chain = ancestorScopes(scope);
+  const label = (s: Scope) => scopeNames(s, catalog).at(-1) ?? t('scope.global');
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex justify-end">{add}</div>
-      {body}
-      <ItemFormDialog
-        open={dialog !== null}
-        onOpenChange={(open) => !open && setDialog(null)}
-        row={dialog?.row ?? null}
-        defaultScope={scope ?? GLOBAL_SCOPE}
-        catalog={catalog}
-      />
-    </div>
+    <Breadcrumb aria-label={t('catalog.breadcrumbs')}>
+      <BreadcrumbList>
+        {chain.map((s, index) => (
+          <Fragment key={scopeKey(s)}>
+            {index > 0 && <BreadcrumbSeparator className="rtl:rotate-180" />}
+            <BreadcrumbItem>
+              {index === chain.length - 1 ? (
+                <BreadcrumbPage dir="auto">{label(s)}</BreadcrumbPage>
+              ) : (
+                <BreadcrumbLink asChild>
+                  <button
+                    type="button"
+                    dir="auto"
+                    className="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    onClick={() => onSelect(s)}
+                  >
+                    {label(s)}
+                  </button>
+                </BreadcrumbLink>
+              )}
+            </BreadcrumbItem>
+          </Fragment>
+        ))}
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }
 
-function IntervalsTab({
-  catalog,
-  scope,
-}: {
-  catalog: VehicleCatalog | undefined;
-  scope: Scope | null;
-}) {
+function TreePane({ scope, onSelect }: { scope: Scope; onSelect: (scope: Scope) => void }) {
+  const vehicleCatalog = useVehicleCatalog();
+  const items = useItems();
   const intervals = useIntervals();
-  const items = useItems();
-  const save = useSaveInterval();
-  const remove = useDeleteInterval();
-  const [dialog, setDialog] = useState<{ row: Interval | null } | null>(null);
-  const itemIds = [...new Set((items.data ?? []).map((item) => item.itemId))];
+  const counts = countByScope([...(items.data ?? []), ...(intervals.data ?? [])]);
 
-  let body;
-  if (intervals.isPending) body = <LoadingState rows={8} />;
-  else if (intervals.isError)
-    body = <ErrorState error={intervals.error} onRetry={() => void intervals.refetch()} />;
-  else {
-    const rows = filterRows(intervals.data, scope);
-    body =
-      rows.length === 0 ? (
-        <EmptyState title={t('catalog.noIntervals')} description={t('catalog.noRowsHint')} />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('catalog.field.intervalId')}</TableHead>
-                <TableHead>{t('catalog.field.title')}</TableHead>
-                <TableHead className="text-end">{t('catalog.field.km')}</TableHead>
-                <TableHead className="text-end">{t('catalog.field.months')}</TableHead>
-                <TableHead>{t('catalog.field.coversItemIds')}</TableHead>
-                <TableHead>{t('catalog.field.scope')}</TableHead>
-                <TableHead>{t('catalog.status')}</TableHead>
-                <TableHead className="text-end">{t('common.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className={row.disabled ? 'text-muted-foreground' : undefined}
-                >
-                  <TableCell className="font-mono text-xs">{row.intervalId}</TableCell>
-                  <TableCell>
-                    <span dir="auto">{row.title}</span>
-                  </TableCell>
-                  <TableCell className="text-end tabular-nums">{formatNumber(row.km)}</TableCell>
-                  <TableCell className="text-end tabular-nums">
-                    {formatNumber(row.months)}
-                  </TableCell>
-                  <TableCell className="max-w-48">
-                    <span
-                      className="line-clamp-2 font-mono text-xs"
-                      title={row.coversItemIds.join(', ')}
-                    >
-                      {row.coversItemIds.join(', ')}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <ScopeLabel scope={row.scope} catalog={catalog} />
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge disabled={row.disabled} />
-                  </TableCell>
-                  <TableCell>
-                    <RowActions
-                      slug={row.intervalId}
-                      scope={row.scope}
-                      disabled={row.disabled}
-                      busy={save.isPending || remove.isPending}
-                      onEdit={() => setDialog({ row })}
-                      onToggle={() =>
-                        save.mutateAsync({ id: row.id, patch: { disabled: !row.disabled } })
-                      }
-                      onDelete={() => remove.mutateAsync(row.id)}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
-        <Button onClick={() => setDialog({ row: null })}>
-          <Plus data-icon="inline-start" />
-          {t('catalog.addInterval')}
-        </Button>
+  if (vehicleCatalog.isPending) {
+    return (
+      <div className="flex flex-col gap-2" role="status" aria-label={t('common.loading')}>
+        {Array.from({ length: 6 }, (_, index) => (
+          <Skeleton key={index} className="h-8 w-full" />
+        ))}
       </div>
-      {body}
-      <IntervalFormDialog
-        open={dialog !== null}
-        onOpenChange={(open) => !open && setDialog(null)}
-        row={dialog?.row ?? null}
-        defaultScope={scope ?? GLOBAL_SCOPE}
-        catalog={catalog}
-        itemIds={itemIds}
-      />
-    </div>
+    );
+  }
+  if (vehicleCatalog.isError) {
+    return (
+      <ErrorState error={vehicleCatalog.error} onRetry={() => void vehicleCatalog.refetch()} />
+    );
+  }
+  return (
+    <ScopeTree
+      root={buildTree(vehicleCatalog.data)}
+      selected={scope}
+      onSelect={onSelect}
+      counts={counts}
+    />
   );
 }
 
 export function CatalogPage() {
+  const [params, setParams] = useSearchParams();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const vehicleCatalog = useVehicleCatalog();
-  const [scope, setScope] = useState<Scope | null>(null);
+  const catalog = vehicleCatalog.data;
+  const scope = scopeFromParams(params);
+  const level = levelOf(scope);
+  const name = scopeNames(scope, catalog).at(-1) ?? t('scope.global');
+
+  function select(next: Scope) {
+    setParams(scopeToParams(next));
+    setDrawerOpen(false);
+  }
 
   return (
     <>
       <PageHeader title={t('catalog.title')} description={t('catalog.description')} />
-      <CatalogRules />
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm text-muted-foreground">{t('catalog.scopeFilter')}</span>
-        <ScopePicker
-          idPrefix="filter-scope"
-          allowAll
-          catalog={vehicleCatalog.data}
-          value={scope}
-          onChange={setScope}
-        />
-        {vehicleCatalog.isError && (
-          <Button variant="link" size="sm" onClick={() => void vehicleCatalog.refetch()}>
-            {t('catalog.vehicleCatalogError')}
-          </Button>
-        )}
+      <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <Card className="sticky top-22 hidden max-h-[calc(100svh-7rem)] gap-3 overflow-y-auto lg:flex">
+          <CardContent className="flex flex-col gap-3">
+            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {t('catalog.tree.title')}
+            </h2>
+            <TreePane scope={scope} onSelect={select} />
+          </CardContent>
+        </Card>
+
+        <div className="flex min-w-0 flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <ScopeBreadcrumbs scope={scope} catalog={catalog} onSelect={select} />
+            <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="lg:hidden">
+                  <PanelLeftOpen data-icon="inline-start" className="rtl:-scale-x-100" />
+                  {t('catalog.tree.open')}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80 max-w-[85vw] gap-0">
+                <SheetHeader>
+                  <SheetTitle>{t('catalog.tree.title')}</SheetTitle>
+                  <SheetDescription>{t('catalog.tree.drawerHint')}</SheetDescription>
+                </SheetHeader>
+                <div className="overflow-y-auto px-4 pb-4">
+                  <TreePane scope={scope} onSelect={select} />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight" dir="auto">
+                {name}
+              </h2>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {t(LEVEL_LABEL[level])}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">{t(LEVEL_HINT[level], { name })}</p>
+          </div>
+
+          <CatalogRules />
+
+          <Tabs defaultValue="items" className="gap-4">
+            <TabsList>
+              <TabsTrigger value="items">{t('catalog.items')}</TabsTrigger>
+              <TabsTrigger value="intervals">{t('catalog.intervals')}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="items">
+              <ItemsPanel key={scopeKey(scope)} scope={scope} catalog={catalog} />
+            </TabsContent>
+            <TabsContent value="intervals">
+              <IntervalsPanel key={scopeKey(scope)} scope={scope} catalog={catalog} />
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
-      <Tabs defaultValue="items" className="gap-4">
-        <TabsList>
-          <TabsTrigger value="items">{t('catalog.items')}</TabsTrigger>
-          <TabsTrigger value="intervals">{t('catalog.intervals')}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="items">
-          <ItemsTab catalog={vehicleCatalog.data} scope={scope} />
-        </TabsContent>
-        <TabsContent value="intervals">
-          <IntervalsTab catalog={vehicleCatalog.data} scope={scope} />
-        </TabsContent>
-      </Tabs>
     </>
   );
 }
